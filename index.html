@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>接口自动化生成 — 流程与关卡一览</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f6f9fc;
+    --border: #e3ecf4;
+    --txt: #22313f;
+    --txt-dim: #556a80;
+    --teal: #0d9488;
+    --teal-soft: #e9f7f5;
+    --blue: #2563eb;
+    --blue-soft: #eef4ff;
+    --amber: #c2740a;
+    --amber-soft: #fdf4e3;
+    --red: #d64545;
+    --red-soft: #fdeeee;
+    --green: #1a9e4b;
+    --green-soft: #edf9f0;
+    --purple: #7c3aed;
+    --purple-soft: #f4efff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--txt);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    padding: 44px 48px 60px;
+    min-width: 1180px;
+  }
+
+  header { text-align: center; margin-bottom: 8px; }
+  header h1 { font-size: 25px; color: var(--txt); letter-spacing: 1px; }
+  header .sub { color: var(--txt-dim); font-size: 14.5px; margin-top: 9px; line-height: 1.7; }
+  header .sub b { color: var(--teal); }
+
+  .section-title {
+    display: flex; align-items: baseline; gap: 10px;
+    margin: 40px 0 16px; font-size: 17px; font-weight: 700; color: var(--txt);
+  }
+  .section-title .idx {
+    font-size: 13.5px; color: #fff; background: var(--teal);
+    border-radius: 4px; padding: 2px 8px; font-weight: 700; letter-spacing: 1px;
+    align-self: center;
+  }
+  .section-title .desc { font-size: 14px; color: var(--txt-dim); font-weight: 400; margin-left: auto; }
+
+  /* ============ 六步流程（每步内嵌自己的关卡） ============ */
+  .pipeline { display: flex; align-items: stretch; }
+  .stage {
+    flex: 1; position: relative;
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 14px 12px; min-width: 0;
+    display: flex; flex-direction: column;
+    box-shadow: 0 1px 3px rgba(30, 60, 90, .05);
+  }
+  .stage + .stage { margin-left: 36px; }
+  .stage + .stage::before {
+    content: ""; position: absolute; left: -27px; top: 44%; transform: translateY(-50%);
+    border-left: 9px solid #b9cfe0; border-top: 6px solid transparent; border-bottom: 6px solid transparent;
+  }
+  .stage .step-tag {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+    padding: 3px 9px; border-radius: 99px; margin-bottom: 9px; width: fit-content;
+  }
+  .stage h3 { font-size: 16px; margin-bottom: 3px; }
+  .stage .alias { font-size: 12px; color: var(--txt-dim); margin-bottom: 8px; }
+  .stage .role { font-size: 13.5px; color: #3b4e63; line-height: 1.7; margin-bottom: 8px; flex: 1; }
+  .stage .gate {
+    border-radius: 8px; padding: 7px 10px; font-size: 12.5px; line-height: 1.6;
+    border: 1px solid transparent;
+  }
+  .stage .gate b { display: block; margin-bottom: 1px; font-size: 13px; }
+  .gate-red    { background: var(--red-soft);    border-color: #f2c7c7; }
+  .gate-red b    { color: var(--red); }
+  .gate-amber  { background: var(--amber-soft);  border-color: #efd3a0; }
+  .gate-amber b { color: var(--amber); }
+  .gate-green  { background: var(--green-soft);  border-color: #bfe3cb; }
+  .gate-green b { color: var(--green); }
+  .gate-blue   { background: var(--blue-soft);   border-color: #c6d8f7; }
+  .gate-blue b  { color: var(--blue); }
+  .gate-teal   { background: var(--teal-soft);   border-color: #b7e2dc; }
+  .gate-teal b  { color: var(--teal); }
+
+  .s1 { border-top: 3px solid var(--purple); } .s1 .step-tag { background: var(--purple-soft); color: var(--purple); } .s1 h3 { color: var(--purple); }
+  .s2 { border-top: 3px solid var(--blue); }   .s2 .step-tag { background: var(--blue-soft); color: var(--blue); }   .s2 h3 { color: var(--blue); }
+  .s3 { border-top: 3px solid var(--teal); }    .s3 .step-tag { background: var(--teal-soft); color: var(--teal); }    .s3 h3 { color: var(--teal); }
+  .s4 { border-top: 3px solid var(--green); }   .s4 .step-tag { background: var(--green-soft); color: var(--green); }  .s4 h3 { color: var(--green); }
+  .s5 { border-top: 3px solid var(--amber); }   .s5 .step-tag { background: var(--amber-soft); color: var(--amber); }  .s5 h3 { color: var(--amber); }
+  .s6 { border-top: 3px solid #e07b39; }        .s6 .step-tag { background: #fdeee2; color: #d0631f; }                .s6 h3 { color: #d0631f; }
+
+  /* ============ 三个"为什么准" ============ */
+  .cards3 { display: flex; gap: 16px; }
+  .why {
+    flex: 1; background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; box-shadow: 0 1px 3px rgba(30,60,90,.05);
+  }
+  .why .icon {
+    width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center;
+    justify-content: center; font-size: 17px; margin-bottom: 10px;
+  }
+  .why h3 { font-size: 15.5px; margin-bottom: 8px; }
+  .why p { font-size: 13.5px; color: #3b4e63; line-height: 1.85; }
+  .why p b { color: var(--txt); }
+  .why .eg {
+    margin-top: 10px; font-size: 13px; line-height: 1.75; color: #3b4e63;
+    background: var(--bg-soft); border-radius: 8px; padding: 8px 11px;
+    border: 1px dashed var(--border);
+  }
+  .w1 .icon { background: var(--purple-soft); } .w1 h3 { color: var(--purple); }
+  .w2 .icon { background: var(--blue-soft); }  .w2 h3 { color: var(--blue); }
+  .w3 .icon { background: var(--teal-soft); }  .w3 h3 { color: var(--teal); }
+  .w4 .icon { background: var(--green-soft); } .w4 h3 { color: var(--green); }
+
+  /* ============ "跟谁比"表 ============ */
+  table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff;
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  th { background: var(--bg-soft); color: var(--txt); font-size: 14px; font-weight: 700;
+    padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  td { font-size: 14px; color: #3b4e63; padding: 11px 14px; border-bottom: 1px solid #eef3f8;
+    line-height: 1.75; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-weight: 700; color: var(--teal); white-space: nowrap; }
+  td .bad { color: var(--red); }
+
+  /* ============ 翻车故事 ============ */
+  .stories { display: flex; gap: 16px; }
+  .story {
+    flex: 1; background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; box-shadow: 0 1px 3px rgba(30,60,90,.05);
+    border-left: 4px solid var(--red);
+  }
+  .story .tag {
+    display: inline-block; font-size: 12px; color: #fff; background: var(--red);
+    border-radius: 99px; padding: 2px 10px; margin-bottom: 9px; font-weight: 700; letter-spacing: .5px;
+  }
+  .story h3 { font-size: 15px; margin-bottom: 8px; }
+  .story p { font-size: 13.5px; color: #3b4e63; line-height: 1.85; }
+  .story .fix {
+    margin-top: 10px; font-size: 13px; line-height: 1.75; color: #1f7040;
+    background: var(--green-soft); border-radius: 8px; padding: 8px 11px;
+  }
+  .story .fix b { color: var(--green); }
+
+  /* ============ 数据 ============ */
+  .stats { display: flex; gap: 16px; }
+  .stat {
+    flex: 1; background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 14px; text-align: center; box-shadow: 0 1px 3px rgba(30,60,90,.05);
+  }
+  .stat .num { font-size: 27px; font-weight: 800; color: var(--teal); letter-spacing: -0.5px; }
+  .stat .lbl { font-size: 13px; color: var(--txt-dim); margin-top: 6px; line-height: 1.6; }
+
+  .motto {
+    margin-top: 34px; background: var(--teal-soft); border: 1px solid #b7e2dc;
+    border-radius: 12px; padding: 15px 22px; text-align: center;
+    font-size: 15px; color: var(--txt); line-height: 1.8;
+  }
+  .motto b { color: var(--teal); }
+
+  footer { margin-top: 36px; text-align: center; font-size: 13px; color: var(--txt-dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>接口自动化用例是怎么"又准又稳"地生成的</h1>
+  <div class="sub">
+    一条带反馈回路的自动化流水线：文本用例 → 机器翻译成可执行的接口测试 → 本地试跑 → <b>跑通过的</b>才上传公司测试平台（DongTest）<br>
+    准，靠的是<b>一切有出处、用真实数据、真跑验证</b>；稳，靠的是<b>每一步都有机器关卡 + 人工确认</b>
+    ｜ 流程走向由确定性规则控制，LLM 只做翻译不做决策（回路全景见配套 Loop 架构图）
+  </div>
+</header>
+
+<!-- ═══════ ① 六步流程（关卡内嵌） ═══════ -->
+<div class="section-title"><span class="idx">①</span> 六步流程 —— 每一步都带一道关卡，不合格不放行<span class="desc">关卡 = 机器自动检查，不靠 AI 自觉</span></div>
+<div class="pipeline">
+  <div class="stage s1">
+    <span class="step-tag">第 1 步</span>
+    <h3>做判断</h3>
+    <div class="alias">Step 1 判据提取与判定</div>
+    <div class="role">逐条看人写的用例：需要的接口名、字段、期望值，在资料里<b>查得到出处</b>吗？</div>
+    <div class="gate gate-red">
+      <b>关卡 · 查无出处</b>
+      查不到 → 标"待补"，绝不瞎编。编的接口跑必失败，还会污染平台
+    </div>
+  </div>
+  <div class="stage s2">
+    <span class="step-tag">第 2 步</span>
+    <h3>备真数据</h3>
+    <div class="alias">Step 2 物料先行</div>
+    <div class="role">从线上日志里捞<b>真实用户的请求参数</b>当测试数据（不自己编），每份都先试用一次</div>
+    <div class="gate gate-red">
+      <b>关卡 · 试用不合格</b>
+      试用命中不了新功能 → 换数据重来。用户给的数据同样要试用，不例外
+    </div>
+  </div>
+  <div class="stage s3">
+    <span class="step-tag">第 3 步</span>
+    <h3>生成测试</h3>
+    <div class="alias">Step 3 接口用例生成</div>
+    <div class="role">按第 1 步查好的字段和期望值、第 2 步验好的数据，<b>组装</b>成机器能执行的测试——只组装不创造</div>
+    <div class="gate gate-red">
+      <b>关卡 · 偷懒写死</b>
+      要求"跟上游比"的测试，机器自动核对它真的去比了——写死成固定值直接打回
+    </div>
+  </div>
+  <div class="stage s4">
+    <span class="step-tag">第 4 步</span>
+    <h3>本地试跑</h3>
+    <div class="alias">Step 4 执行</div>
+    <div class="role">对真实环境跑一遍，每条用例给出<b>通过 / 失败</b>的结论和证据（期望值 vs 实际值）</div>
+    <div class="gate gate-amber">
+      <b>关卡 · 自动校准</b>
+      批量跑不通 → 拿真实返回探明正确位置，修正后重跑（最多 2 轮），全程留记录
+    </div>
+  </div>
+  <div class="stage s5">
+    <span class="step-tag">第 5 步</span>
+    <h3>人工确认</h3>
+    <div class="alias">Step 5 收口与渲染</div>
+    <div class="role">生成一份按用例聚合的总报告，人在网页里<b>检查、修改、重跑</b>，觉得没问题了才往下走</div>
+    <div class="gate gate-green">
+      <b>关卡 · 未确认不上传</b>
+      没有人点头 → 一条也不传平台。"没人反对"不等于"同意"
+    </div>
+  </div>
+  <div class="stage s6">
+    <span class="step-tag">第 6 步</span>
+    <h3>上传平台</h3>
+    <div class="alias">Step 6 回写 DongTest</div>
+    <div class="role">只上传<b>本地跑通过的</b>，传到公司测试平台 DongTest，再跑一遍冒烟验证</div>
+    <div class="gate gate-blue">
+      <b>关卡 · 传完回查</b>
+      不信"保存成功"的提示——传完再读一遍确认真的存进去了
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ ② 为什么准 ═══════ -->
+<div class="section-title"><span class="idx">②</span> 为什么生成的用例"准" —— 四个坚持</div>
+<div class="cards3">
+  <div class="why w1">
+    <div class="icon">📚</div>
+    <h3>一切有出处</h3>
+    <p>接口名、字段、期望值全部从资料里<b>抄</b>出来（用例文档 → 代码分析结论 → 内置模板库，三级查证）——AI 只负责翻译和组装，不负责想象。就像写论文必须引文献，查无出处宁可标"待补"。</p>
+    <div class="eg">例："免邮标签的图标编号"这个期望值，来自需求文档的枚举表，不是 AI 觉得它应该是几</div>
+  </div>
+  <div class="why w2">
+    <div class="icon">🧪</div>
+    <h3>数据是真的</h3>
+    <p>测试数据 = 从线上日志捞的<b>真实用户请求</b>（几十个参数原样保留），而且每份都要先试用：能不能命中新功能？<b>试用不合格就换</b>。不自己编参数——实测自己拼的简化参数根本出不来页面楼层，测了个寂寞。</p>
+    <div class="eg">例：测"离境退税标签"，就找真实触发过这个场景的用户请求，而不是随手填个商品号</div>
+  </div>
+  <div class="why w3">
+    <div class="icon">🔗</div>
+    <h3>"跟谁比"先声明</h3>
+    <p>每条核对规则都要先声明比对对象：跟<b>固定值</b>比、跟<b>上游数据</b>比、还是跟<b>响应里的其他字段</b>比。声明了，机器就核对你真的去比了——防止"跟上游比"被偷懒写成"等于某个写死的值"。</p>
+    <div class="eg">例："标签前两位 = 中台下发的钱两位" → 必须真的去读中台返回，不能抄个固定值糊弄（假通过）</div>
+  </div>
+  <div class="why w4">
+    <div class="icon">🔧</div>
+    <h3>出错会自愈</h3>
+    <p>上游资料里的字段路径写错了怎么办？真跑一遍就会暴露——拿<b>真实返回数据</b>探明正确位置，修正后重跑。<b>只修"怎么取值"，不改"什么算通过"</b>——通过标准永远不放松。</p>
+    <div class="eg">例：资料写的取值路径取不到 → 从真实返回里找到真实位置 → 修正 → 重跑通过，全程留"校准记录"</div>
+  </div>
+</div>
+
+<!-- ═══════ ③ 跟谁比 ═══════ -->
+<div class="section-title"><span class="idx">③</span> 四种核对方式 —— 先声明，机器核对说到做到</div>
+<table>
+  <tr><th style="width:120px">核对方式</th><th style="width:300px">意思</th><th>举例</th></tr>
+  <tr>
+    <td>跟固定值比</td>
+    <td>该是什么就是什么，直接比对</td>
+    <td>七天内无理由退货标签的类型编号，应该等于 2</td>
+  </tr>
+  <tr>
+    <td>跟上游比</td>
+    <td>页面展示的要对得上中台下发的（传出去的、拿回来的都要对）</td>
+    <td>展示的标签顺序前两位 = 中台下发的顺序前两位<br><span class="bad">❌ 写成"第一位等于某个固定编号" = 假通过（上游变了也照样绿）</span></td>
+  </tr>
+  <tr>
+    <td>跟自己内部比</td>
+    <td>同一个返回里，两个字段要互相印证</td>
+    <td>弹层里展示的标签要跟楼层里展示的标签一致</td>
+  </tr>
+  <tr>
+    <td>跟自身规则比</td>
+    <td>自己不能自相矛盾</td>
+    <td>标签列表里不能有重复项、顺序编号要连续</td>
+  </tr>
+</table>
+
+<!-- ═══════ ④ 翻车故事 ═══════ -->
+<div class="section-title"><span class="idx">④</span> 三个真实的翻车故事 —— 每条规矩背后都是一次事故<span class="desc">不是设计出来的最佳实践，是踩出来的</span></div>
+<div class="stories">
+  <div class="story">
+    <span class="tag">事故 1 · 假通过</span>
+    <h3>"跟上游比"被偷偷写成了固定值</h3>
+    <p>某天发现 20 条用例全绿，但<b>没有一条真的去读过中台数据</b>——因为"顺序跟中台一致"被翻译成了"第一位等于某固定编号"。上游排序就算坏了，测试照样全过。更糟的是：21 条自查清单 AI 全部"通过"，没发现任何问题。</p>
+    <div class="fix"><b>修复：</b>每条核对必须先声明"我跟谁比"（四选一）→ 机器关卡自动核对声明的和实际做的一致。关卡上线时先拿旧用例试跑：<b>查出 67 处问题</b>——先证明它真能拦，才敢启用</div>
+  </div>
+  <div class="story">
+    <span class="tag">事故 2 · 测了个寂寞</span>
+    <h3>简化参数根本出不来页面</h3>
+    <p>早期图省事用了十几个参数的简化请求，结果商品详情页的核心楼层<b>根本不会渲染</b>——追到代码才发现：完整请求才会触发按模板拼装楼层，简化请求走默认逻辑拼不出来。跑出来的"通过"毫无意义。</p>
+    <div class="fix"><b>修复：</b>立铁律——必须用完整参数（40 个以上），且优先从真实日志捞（真实请求天然就是完整的）。把关卡加进数据检查，参数太少直接判不合格</div>
+  </div>
+  <div class="story">
+    <span class="tag">事故 3 · 换号全绿</span>
+    <h3>换个测试账号，标签全变了</h3>
+    <p>换了测试账号后页面标签<b>整组消失</b>（不同账号权益不同），但因为没人重新核对，测试照样全绿——这种"假绿"比红色失败可怕得多：它让人以为功能没问题。</p>
+    <div class="fix"><b>修复：</b>换过任何测试数据，必须重新核对目标场景还在；且每条用例用自己的数据，不许一条数据套全部用例</div>
+  </div>
+</div>
+
+<!-- ═══════ ⑤ 数据 ═══════ -->
+<div class="section-title"><span class="idx">⑤</span> 几个实测数字</div>
+<div class="stats">
+  <div class="stat">
+    <div class="num">3 秒</div>
+    <div class="lbl">34 条用例本地批量跑完<br>（原来一条条跑要几十秒）</div>
+  </div>
+  <div class="stat">
+    <div class="num">90+</div>
+    <div class="lbl">从日志捞的真实请求参数个数<br>（51 个外层 + 45 个 body 层）</div>
+  </div>
+  <div class="stat">
+    <div class="num">67 处</div>
+    <div class="lbl">核对关卡上线首跑<br>从旧用例里查出的问题数</div>
+  </div>
+  <div class="stat">
+    <div class="num">6 项</div>
+    <div class="lbl">上传平台前的机器预检项<br>（把十几分钟的冒烟试错变 0 秒）</div>
+  </div>
+  <div class="stat">
+    <div class="num">0 条</div>
+    <div class="lbl">未经人工确认就上传平台的用例<br>（没确认 = 不上传）</div>
+  </div>
+</div>
+
+<div class="motto">
+  一句话总结这套设计：<b>AI 反复犯的错，靠"提醒它小心"是拦不住的——必须变成机器关卡，不合格就打回重来。</b><br>
+  AI 只负责在证据规则内填空，不负责自由发挥；每个结论都跑过真实环境验证，每一步都留痕可复查。
+</div>
+
+<footer>
+  task-testcase-api · 接口自动化生成流程 · 2026-10-16 · 配套文档：production/task-testcase-api-流程分享.md
+</footer>
+
+</body>
+</html>
