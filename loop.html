@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>带反馈回路的自动化流水线 — LLM 负责翻译，规则负责把关</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --border: #e3ecf4;
+    --txt: #22313f;
+    --txt-dim: #556a80;
+    --teal: #0d9488;
+    --blue: #2563eb;
+    --amber: #c2740a;
+    --red: #d64545;
+    --green: #1a9e4b;
+    --purple: #7c3aed;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--txt);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    padding: 40px 48px 50px; min-width: 1670px;
+  }
+  header { text-align: center; margin-bottom: 6px; }
+  header h1 { font-size: 27px; letter-spacing: 1px; }
+  header .sub { color: var(--txt-dim); font-size: 15.5px; margin-top: 9px; line-height: 1.7; }
+  header .sub b { color: var(--teal); }
+
+  /* 纵向分层（canvas 1570 × 1370）：
+     y  14-119  输入带 + 图例
+     y 136-496  六阶段卡片（高 360）
+     y 526-665  回路层（自环线 568 / ③线 613 / ④线 658，标签 546/591/636）
+     y 700-890  底部三卡（高 190）
+     y 914-1094 校验器机制带
+     y 1118-1248 下游消费带
+     y 1272-1347 motto                                            */
+  .canvas { position: relative; width: 1570px; height: 1430px; margin: 14px auto 0; }
+
+  .input-band {
+    position: absolute; top: 14px; left: 30px; width: 920px; z-index: 3;
+    background: #f6f3fd; border: 1px solid #d9c9f7; border-radius: 10px;
+    padding: 10px 16px;
+  }
+  .input-band .t { font-size: 15px; font-weight: 700; color: var(--purple); margin-bottom: 4px; }
+  .input-band .items { font-size: 14.3px; color: #3b4e63; line-height: 1.62; }
+  .input-band .items b { color: var(--txt); }
+
+  .legend {
+    position: absolute; top: 24px; right: 30px; z-index: 6;
+    background: #fafcfe; border: 1px solid var(--border); border-radius: 9px;
+    padding: 9px 14px; font-size: 14.3px; color: #3b4e63;
+    display: flex; gap: 16px;
+  }
+  .legend .li { display: flex; align-items: center; gap: 7px; }
+  .legend .sw { width: 30px; height: 0; border-top-width: 3px; border-top-style: solid; }
+  .sw-fwd   { border-top-color: #b9cfe0; }
+  .sw-reject{ border-top-color: var(--red); border-top-style: dashed; }
+  .sw-human { border-top-color: var(--green); border-top-style: dashed; }
+  .sw-bypass{ border-top-color: #9fb1c3; border-top-style: dotted; }
+
+  .stage {
+    position: absolute; top: 136px; width: 236px; height: 390px;
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 13px 11px; box-shadow: 0 1px 3px rgba(30,60,90,.05);
+    display: flex; flex-direction: column;
+  }
+  .s1 { left: 30px;   border-top: 3px solid var(--purple); }
+  .s2 { left: 284px;  border-top: 3px solid var(--blue); }
+  .s3 { left: 568px;  border-top: 3px solid var(--teal); }
+  .s4 { left: 792px;  border-top: 3px solid var(--green); }
+  .s5 { left: 1046px; border-top: 3px solid var(--amber); }
+  .s6 { left: 1300px; border-top: 3px solid #d0631f; }
+
+  .stage .no {
+    font-size: 13.5px; font-weight: 800; letter-spacing: 1px;
+    padding: 2px 10px; border-radius: 99px; margin-bottom: 6px; width: fit-content;
+  }
+  .s1 .no { background: #f4efff; color: var(--purple); }
+  .s2 .no { background: #eef4ff; color: var(--blue); }
+  .s3 .no { background: #e9f7f5; color: var(--teal); }
+  .s4 .no { background: #edf9f0; color: var(--green); }
+  .s5 .no { background: #fdf4e3; color: var(--amber); }
+  .s6 .no { background: #fdeee2; color: #d0631f; }
+
+  .stage h3 { font-size: 17.5px; margin-bottom: 5px; }
+  .s1 h3 { color: var(--purple); } .s2 h3 { color: var(--blue); }
+  .s3 h3 { color: var(--teal); }   .s4 h3 { color: var(--green); }
+  .s5 h3 { color: var(--amber); }  .s6 h3 { color: #d0631f; }
+
+  .stage .io { font-size: 13.8px; line-height: 1.5; margin-bottom: 3px; }
+  .stage .io.in  { color: var(--txt-dim); }
+  .stage .io.out { color: var(--teal); }
+  .stage .io b { font-weight: 700; }
+
+  .stage .role { font-size: 13.8px; color: #3b4e63; line-height: 1.56; margin: 5px 0 6px; flex: 1; }
+
+  .stage .validator {
+    border-radius: 8px; padding: 6px 10px; font-size: 13.8px; line-height: 1.5;
+    background: #fdeeee; border: 1px solid #f2c7c7; color: #8a3a3a;
+  }
+  .stage .validator b { color: var(--red); display: block; margin-bottom: 2px; font-size: 14.3px; }
+  .stage .validator.v-green { background: #edf9f0; border-color: #bfe3cb; color: #256c40; }
+  .stage .validator.v-green b { color: var(--green); }
+  .stage .validator.v-blue { background: #eef4ff; border-color: #c6d8f7; color: #33507e; }
+  .stage .validator.v-blue b { color: var(--blue); }
+
+  .loop-tag {
+    position: absolute; font-size: 14px; font-weight: 600; white-space: nowrap;
+    background: #fff; border-radius: 99px; padding: 3px 13px; z-index: 5;
+  }
+  .lt-red   { border: 1.5px solid #eeb1b1; color: var(--red); }
+  .lt-green { border: 1.5px solid #a9d8b8; color: #1a7a3c; background: #f4fbf6; }
+
+  .bcard {
+    position: absolute; top: 730px; height: 210px;
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; box-shadow: 0 1px 3px rgba(30,60,90,.05);
+  }
+  .bc-bypass { left: 30px;   width: 360px; border-left: 4px solid #9fb1c3; }
+  .bc-llm    { left: 410px; width: 520px; border-left: 4px solid var(--purple); }
+  .bc-final  { left: 950px; width: 590px; border-left: 4px solid var(--green); }
+  .bcard .head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .bcard .head .t { font-size: 16px; font-weight: 700; }
+  .bc-bypass .head .t { color: #4a617a; }
+  .bc-llm    .head .t { color: var(--purple); }
+  .bc-final  .head .t { color: var(--green); }
+  .bcard .row { font-size: 14.1px; color: #3b4e63; line-height: 1.62; margin-bottom: 5px; }
+  .bcard .row b { color: var(--txt); }
+  .bcard .row .yes { color: var(--green); font-weight: 700; }
+  .bcard .row .no-c { color: var(--red); font-weight: 700; }
+
+  .val-band {
+    position: absolute; top: 960px; left: 30px; width: 1540px; z-index: 3;
+    background: #fdf3f3; border: 1px solid #f2c7c7; border-radius: 12px;
+    padding: 12px 18px;
+  }
+  .val-band .t { font-size: 16px; font-weight: 700; color: var(--red); margin-bottom: 9px; }
+  .val-band .grid { display: flex; gap: 12px; }
+  .val-band .cell {
+    flex: 1; background: #fff; border: 1px solid #f0d4d4; border-radius: 8px;
+    padding: 10px 12px; font-size: 13.9px; color: #3b4e63; line-height: 1.62;
+  }
+  .val-band .cell b { display: block; color: var(--red); font-size: 14px; margin-bottom: 4px; }
+  .val-band .cell code {
+    font-family: Menlo, Consolas, monospace; font-size: 12.7px; color: #8a3a3a;
+    background: #fdf0f0; border-radius: 3px; padding: 0 4px;
+  }
+
+  .downstream {
+    position: absolute; top: 1170px; left: 30px; width: 1540px; z-index: 3;
+    background: #edf9f0; border: 1px solid #bfe3cb; border-radius: 12px;
+    padding: 12px 18px;
+  }
+  .downstream .t { font-size: 16px; font-weight: 700; color: var(--green); margin-bottom: 8px; }
+  .downstream .grid { display: flex; gap: 12px; }
+  .downstream .cell {
+    flex: 1; background: #fff; border: 1px solid #cfe8d8; border-radius: 8px;
+    padding: 10px 12px; font-size: 14.1px; color: #3b4e63; line-height: 1.62;
+  }
+  .downstream .cell b { display: block; color: var(--green); font-size: 14.2px; margin-bottom: 3px; }
+
+  .motto {
+    position: absolute; top: 1330px; left: 30px; width: 1540px;
+    background: #e9f7f5; border: 1px solid #b7e2dc; border-radius: 12px;
+    padding: 13px 24px; text-align: center; font-size: 15.5px; line-height: 1.75; color: var(--txt);
+  }
+  .motto b { color: var(--teal); }
+  .motto b.r { color: var(--red); }
+  .motto b.p { color: var(--purple); }
+
+  svg.wires { position: absolute; left: 0; top: 0; width: 1570px; height: 1430px; z-index: 1; }
+  .stage, .loop-tag, .bcard, .legend, .motto, .input-band, .val-band, .downstream { z-index: 3; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>带反馈回路的自动化流水线</h1>
+  <div class="sub">
+    经典工程模式（编译器 / CI 流水线同款）：<b>数据正向流过六个处理阶段，每个阶段出口挂一个确定性校验器（独立脚本，判定不经过 LLM）；校验失败触发反馈回路送回重做</b>，修不好走显式异常出口<br>
+    LLM 在其中的角色是各阶段内的<b>翻译器</b>；流程走向和放行由确定性规则控制，不由 LLM 自主决定
+  </div>
+</header>
+
+<div class="canvas">
+  <svg class="wires" viewBox="0 0 1570 1430">
+    <defs>
+      <marker id="mFwd" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#b9cfe0"/>
+      </marker>
+      <marker id="mRed" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#d64545"/>
+      </marker>
+      <marker id="mGreen" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#1a9e4b"/>
+      </marker>
+      <marker id="mGray" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#9fb1c3"/>
+      </marker>
+    </defs>
+
+    <!-- 上游输入带 → S1 -->
+    <line x1="148" y1="121" x2="148" y2="133" stroke="#b9cfe0" stroke-width="3" marker-end="url(#mFwd)"/>
+
+    <!-- 正向推进箭头（六卡间隙） -->
+    <line x1="267" y1="316" x2="282" y2="316" stroke="#b9cfe0" stroke-width="3" marker-end="url(#mFwd)"/>
+    <line x1="521" y1="316" x2="536" y2="316" stroke="#b9cfe0" stroke-width="3" marker-end="url(#mFwd)"/>
+    <line x1="775" y1="316" x2="790" y2="316" stroke="#b9cfe0" stroke-width="3" marker-end="url(#mFwd)"/>
+    <line x1="1029" y1="316" x2="1044" y2="316" stroke="#b9cfe0" stroke-width="3" marker-end="url(#mFwd)"/>
+    <line x1="1283" y1="316" x2="1298" y2="316" stroke="#b9cfe0" stroke-width="3" marker-end="url(#mFwd)"/>
+
+    <!-- 回路①②⑤：自环（卡片底部 y=496 → 线 y=538 → 回卡片底） -->
+    <path d="M 440 526 L 440 568 L 350 568 L 350 532" fill="none"
+          stroke="#d64545" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#mRed)"/>
+    <path d="M 700 526 L 700 568 L 600 568 L 600 532" fill="none"
+          stroke="#d64545" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#mRed)"/>
+    <path d="M 1470 526 L 1470 568 L 1370 568 L 1370 532" fill="none"
+          stroke="#d64545" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#mRed)"/>
+
+    <!-- 回路③：S4 → S2（水平段 y=583） -->
+    <path d="M 900 526 L 900 613 L 340 613 L 340 532" fill="none"
+          stroke="#d64545" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#mRed)"/>
+
+    <!-- 回路④：S5 → S4（水平段 y=628） -->
+    <path d="M 1130 526 L 1130 658 L 800 658 L 800 532" fill="none"
+          stroke="#1a9e4b" stroke-width="3" stroke-dasharray="8 6" marker-end="url(#mGreen)"/>
+
+    <!-- 异常出口（S1 → 旁路卡，y 526→692） -->
+    <path d="M 148 526 L 148 722" fill="none" stroke="#9fb1c3" stroke-width="2" stroke-dasharray="2 6" marker-end="url(#mGray)"/>
+    <!-- 正常出口（S6 → 终点卡，y 526→692） -->
+    <path d="M 1418 526 L 1418 722" fill="none" stroke="#1a9e4b" stroke-width="3.5" marker-end="url(#mGreen)"/>
+  </svg>
+
+  <div class="input-band">
+    <div class="t">📥 上游输入（Step 0 输入读取：三件套，缺一即停）</div>
+    <div class="items">
+      ① <b>文本用例</b>（TC 清单：操作步骤 + 预期结果）
+      ② <b>测试分析定稿</b>（字段级契约：断言字段对照表 / 判据规则 / 期望值常量 / 入参出参规格）
+      ③ <b>PRD/TRD 原文</b>（预期结果的最终仲裁源）
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="li"><span class="sw sw-fwd"></span>正向数据流</div>
+    <div class="li"><span class="sw sw-reject"></span>校验失败回路</div>
+    <div class="li"><span class="sw sw-human"></span>人工确认回路</div>
+    <div class="li"><span class="sw sw-bypass"></span>异常出口</div>
+  </div>
+
+  <!-- 六个阶段 -->
+  <div class="stage s1">
+    <span class="no">阶段 1</span>
+    <h3>判据提取与判定</h3>
+    <div class="io in">📥 输入：上游三件套全文</div>
+    <div class="io out"><b>📤 输出：断言规格表</b>（断言目标与判定.yaml）——每条 TC：字段路径 / 期望值 / 比对声明 / 数据需求，判据唯一权威源</div>
+    <div class="role">自然语言 → 结构化断言规格。类比编译器前端：每个引用都要查到出处（三级证据链），LLM 只翻译不重解。</div>
+    <div class="validator"><b>🚨 校验器 · 引用查证</b>字段/期望值查无出处 → 拒绝编造，走异常出口记「待补」（本步查证靠纪律，产物在阶段 3 出口被后验闸对账）</div>
+  </div>
+
+  <div class="stage s2">
+    <span class="no">阶段 2</span>
+    <h3>物料先行</h3>
+    <div class="io in">📥 输入：规格表的数据需求（目标字段+期望值）</div>
+    <div class="io out"><b>📤 输出：测试数据集</b>（每用例一份真实入参 + 试运行结论）</div>
+    <div class="role">从线上日志取真实用户请求当测试数据（物料，即 fixture），不是手写模拟参数。每份先试运行一次，验证能否命中目标功能。</div>
+    <div class="validator"><b>🚨 校验器 · 试运行验收</b>命中不了目标功能 → 拒收换数据（回路①）；用户给的不豁免</div>
+  </div>
+
+  <div class="stage s3">
+    <span class="no">阶段 3</span>
+    <h3>接口用例生成</h3>
+    <div class="io in">📥 输入：断言规格 + 已验收数据</div>
+    <div class="io out"><b>📤 输出：可执行用例集</b>（api-cases.yaml，唯一真相源——总览/底稿/上传清单全是它的视图）</div>
+    <div class="role">把断言规格 + 验收数据<b>组装</b>成可执行用例集（含断言脚本）——字段和期望值都是上游查证过的，LLM 在这里是填空，不是自由创作。</div>
+    <div class="validator"><b>🚨 校验器 · 生成物审查</b>「声明的比对真的做了吗」静态审查，防假通过 → 不过打回（回路②）</div>
+  </div>
+
+  <div class="stage s4">
+    <span class="no">阶段 4</span>
+    <h3>执行</h3>
+    <div class="io in">📥 输入：可执行用例集 + 测试数据集</div>
+    <div class="io out"><b>📤 输出：执行报告</b>（每用例三态结论 + 期望值 vs 实际值 + 可复现请求）</div>
+    <div class="role">并发运行测试，输出结论和证据。类比跑单测，但被测环境是真实服务。</div>
+    <div class="validator"><b>🚨 校验器 · 失败校准</b>批量失败多是资料路径写错 → 探真实路径修正重跑，≤2 轮、只改取值不改标准</div>
+    <div class="validator v-green" style="margin-top:5px"><b>🚨 校验器 · 数据有效性</b>执行发现数据无效 → 回阶段 2 补（回路③）</div>
+  </div>
+
+  <div class="stage s5">
+    <span class="no">阶段 5</span>
+    <h3>收口与渲染</h3>
+    <div class="io in">📥 输入：执行报告逐条结论</div>
+    <div class="io out"><b>📤 输出：用例执行总览</b>（按原始用例粒度聚合）<b>+ 转化底稿</b>（100% 脚本渲染）</div>
+    <div class="role">按原始用例粒度聚合总览；网页编辑器可视化查看、修改用例，改完重跑刷新报告；确认后渲染转化底稿。</div>
+    <div class="validator v-green"><b>🚦 门禁 · 人工确认</b>没点确认一条不许回写；改了用例回阶段 4 重跑再来（回路④）</div>
+  </div>
+
+  <div class="stage s6">
+    <span class="no">阶段 6</span>
+    <h3>回写 DongTest</h3>
+    <div class="io in">📥 输入：本地 PASS 用例 + 人工确认</div>
+    <div class="io out"><b>📤 输出：平台用例资产 + 上传清单</b>（唯一上传出口，防双传）</div>
+    <div class="role">只回写本地跑通过的用例到测试平台（DongTest）：写后读验证 + 冒烟。</div>
+    <div class="validator v-blue"><b>🚨 校验器 · 平台侧验证</b>静态预检（时序/路径/冲突）+ 上传后回读 + 冒烟，失败修载荷重推（回路⑤）</div>
+  </div>
+
+  <!-- 回路标签（各自水平线下方，互不压线） -->
+  <div class="loop-tag lt-red"  style="left:330px;  top:576px">① 试运行不命中 → 换数据重取</div>
+  <div class="loop-tag lt-red"  style="left:580px;  top:576px">② 生成物不合格 → 回炉重生成</div>
+  <div class="loop-tag lt-red"  style="left:1230px; top:576px">⑤ 平台验证失败 → 修载荷重推</div>
+  <div class="loop-tag lt-red"  style="left:430px;  top:621px">③ 执行发现数据无效 → 回阶段 2 补数据、重新验收</div>
+  <div class="loop-tag lt-green" style="left:880px;  top:666px">④ 人工改用例 → 重跑阶段 4 → 再确认（可多轮，直到点头）</div>
+
+  <!-- 底部三卡 -->
+  <div class="bcard bc-bypass">
+    <div class="head"><span style="font-size:16px">⏸</span><span class="t">异常出口 — 像编译器的告警通道</span></div>
+    <div class="row"><b>待补</b>：引用查不到出处 → 显式记录「缺什么、找谁补」，绝不编造。上游资料补齐后重跑即可转化——<b>跳过也要留痕</b>。</div>
+    <div class="row"><b>降级</b>：确实无法自动化（需 mock / 查库）→ 记录原因转人工，不静默丢弃。</div>
+  </div>
+
+  <div class="bcard bc-llm">
+    <div class="head"><span style="font-size:16px">🤖</span><span class="t">LLM 在这条流水线里的位置（在 / 不在）</span></div>
+    <div class="row"><span class="yes">在（做翻译）</span>：阶段 1 自然语言→断言规格；阶段 3 规格+数据→可执行用例集；阶段 4 失败诊断（校准循环里探索真实字段路径）</div>
+    <div class="row"><span class="no-c">不在（不碰决策）</span>：<b>流程控制</b>——下一步做什么由编排脚本定义，不能跳步；<b>通过标准</b>——断言语义在阶段 1 锁定，之后只许改「怎么取值」不许改「什么算过」；<b>放行</b>——回写需要机器校验 + 人工确认双条件</div>
+  </div>
+
+  <div class="bcard bc-final">
+    <div class="head"><span style="font-size:16px">✅</span><span class="t">正常出口 — 测试平台资产</span></div>
+    <div class="row"><b>放行三条件</b>：本地执行 PASS ＋ 人工确认 ＋ 写后读验证——缺一不放行。</div>
+    <div class="row"><b>沉淀的是</b>：跑通过的、断言不降级的、带可复现输入的长期回归资产。</div>
+  </div>
+
+  <!-- 校验器机制带 -->
+  <div class="val-band">
+    <div class="t">🚨 校验器（闸）到底是什么 —— 每个阶段卡片上的 🚨 小方块，物理形态与触发机制</div>
+    <div class="grid">
+      <div class="cell"><b>物理形态：独立脚本，不是 AI 判断</b>
+        每个 🚨 背后是一个 Node.js 脚本（如 <code>check-assertions.mjs</code>）：读入阶段刚落盘的产物文件（YAML/JSON），用<b>正则匹配 + 路径比对 + 计数</b>做机械对账，输出退出码 0（通过）或 2（拦截）。全程<b>不调用 LLM</b>——判定标准写在脚本代码里，AI 执行时改不了。</div>
+      <div class="cell"><b>怎么触发：编排层写死 → AI 执行 → 脚本裁决</b>
+        不是定时器/git hook 自动触发。流程文档（SKILL.md）写死「该步出口必跑此脚本，不许绕过」→ AI 执行到该步用命令行跑 → 脚本独立解析产物给退出码。exit 2 时命令行必然返回错误，AI 读到错误明细，只能回炉重做——<b>无法「假装通过」</b>。</div>
+      <div class="cell"><b>为什么必须挂在「阶段出口」</b>
+        只有<b>落盘后的产物文件</b>（断言规格表、用例集、执行报告）才是稳定、可机械解析的对象；AI 过程中的「想法」挂不了闸。所以设计上强制<b>每阶段先落盘、再过闸</b>——闸永远检查的是文件，不是口头承诺。</div>
+      <div class="cell"><b>为什么改不了闸：给闸上锁的闸</b>
+        脚本放在只读目录（scenarios/），AI 想绕过得先改脚本——但所有写入请求先经过写保护钩子 <code>guard-write.sh</code>（exit 2 硬拦）。想绕闸 → 改闸 → 改闸被拦。另外每道闸都经「<b>先红验证</b>」：上线前拿已知有问题的旧产物跑，确认真能拦（实测首跑拦出 67 处）才启用。</div>
+    </div>
+  </div>
+
+  <!-- 下游消费带 -->
+  <div class="downstream">
+    <div class="t">📤 给下游的输出（每个产物都有明确消费者，无人消费的产物不生产）</div>
+    <div class="grid">
+      <div class="cell"><b>执行报告 → 流程门禁</b>本地执行报告是门禁查验项：有「未执行+原因」的降级留痕也认，但必须落盘。</div>
+      <div class="cell"><b>上传清单 → 上传站</b>哪些用例可上传的唯一权威表述；下游只认它，不从别处裸组包，防双传。</div>
+      <div class="cell"><b>转化底稿 → 汇总站</b>按 TC 逐条对账（ID 即关联键），汇总站按它聚合全端转化结论。</div>
+      <div class="cell"><b>剩余输入 → 客户端站</b>三件套原样传给下一个站点（task-testcase-app），处理端=客户端的用例归它。</div>
+    </div>
+  </div>
+
+  <div class="motto">
+    可靠性的来源不是「LLM 很聪明」，而是<b class="r">确定性校验器 × 受控反馈回路 × 显式异常出口</b>——LLM 的自由度只放在校验器能判对错的环节（翻译、生成、诊断），
+    判不了对错的地方用 <b class="p">schema 约束 + 人工确认</b> 兜底。每个回路都有终止条件（校准 ≤2 轮、确认必须人点头），不会死循环，更不会静默绕过。
+  </div>
+</div>
+
+</body>
+</html>
